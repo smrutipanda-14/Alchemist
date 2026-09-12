@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0b0b14;
+    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f0f1b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2b4a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #434475;
+}
+
+/* Pixel Font Utility */
+.font-pixel {
+  font-family: 'Press Start 2P', monospace;
+}
+
+.font-cinzel {
+  font-family: 'Cinzel', serif;
+}
+
+/* Glowing & Glassmorphism effects */
+.glass-panel {
+  background: rgba(22, 33, 62, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(157, 78, 221, 0.2);
+}
+
+.glass-card {
+  background: rgba(26, 26, 46, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glow-gold {
+  box-shadow: 0 0 15px rgba(246, 201, 14, 0.35);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(157, 78, 221, 0.3);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 15px rgba(0, 180, 216, 0.35);
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* Game Boy / Pixel CRT scanline effect (optional toggle) */
+.scanlines {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.03),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 0, 255, 0.03)
+  );
+  background-size: 100% 3px, 4px 100%;
+  pointer-events: none;
+}

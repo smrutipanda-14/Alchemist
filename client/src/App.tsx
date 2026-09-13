@@ -6,10 +6,11 @@ import { DashboardPage } from './pages/DashboardPage';
 import { RetroCanvasGame } from './game/RetroCanvasGame';
 import { ItineraryPage } from './pages/ItineraryPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { LeaderboardPage } from './pages/LeaderboardPage';
 
 export const App: React.FC = () => {
   const { user, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'itinerary' | 'profile'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'itinerary' | 'leaderboard' | 'profile'>('dashboard');
   const [openMailboxTrigger, setOpenMailboxTrigger] = useState(false);
 
   if (loading) {
@@ -53,6 +54,10 @@ export const App: React.FC = () => {
 
         {activeTab === 'itinerary' && (
           <ItineraryPage />
+        )}
+
+        {activeTab === 'leaderboard' && (
+          <LeaderboardPage />
         )}
 
         {activeTab === 'profile' && (

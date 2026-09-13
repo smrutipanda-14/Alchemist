@@ -65,6 +65,7 @@ model GameData {
   items    String @default("[]") // JSON representation of inventory for game data schema compatibility
 
   @@index([userId])
+  @@index([xp(sort: Desc)])
 }
 
 model Task {

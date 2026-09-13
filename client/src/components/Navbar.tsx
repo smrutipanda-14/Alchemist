@@ -13,13 +13,14 @@ import {
   LogOut,
   Scroll,
   Gamepad2,
-  LayoutDashboard
+  LayoutDashboard,
+  Trophy
 } from 'lucide-react';
 import api from '../api/client';
 
 interface NavbarProps {
-  activeTab: 'dashboard' | 'game' | 'itinerary' | 'profile';
-  setActiveTab: (tab: 'dashboard' | 'game' | 'itinerary' | 'profile') => void;
+  activeTab: 'dashboard' | 'game' | 'itinerary' | 'leaderboard' | 'profile';
+  setActiveTab: (tab: 'dashboard' | 'game' | 'itinerary' | 'leaderboard' | 'profile') => void;
   onOpenMailbox?: () => void;
 }
 
@@ -119,6 +120,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenM
             >
               <Scroll className="w-3.5 h-3.5" />
               <span>Itinerary</span>
+            </button>
+
+            <button
+              onClick={() => { sound.playBlip(); setActiveTab('leaderboard'); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                activeTab === 'leaderboard'
+                  ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 font-bold shadow-md glow-gold'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              <span>Leaderboard</span>
             </button>
 
             <button

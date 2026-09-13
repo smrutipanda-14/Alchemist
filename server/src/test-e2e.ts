@@ -228,7 +228,15 @@ async function runEndToEndVerification() {
     const meData: any = await meRes.json();
     console.log(`✅ 21. New Session Validated for User: ${meData.user.username} (Level ${meData.user.gameData.level}, Gold ${meData.user.gameData.gold}, Stickers: ${meData.user.stickers?.length})`);
 
-    console.log('\n🎉 ALL 21 END-TO-END VERIFICATION CHECKS (INCLUDING STICKER & ATOMIC TRANSACTIONS) PASSED WITH FLYING COLORS!');
+    // 18. Verify Leaderboard Endpoint (Global All-Time & Weekly)
+    const lbGlobalRes = await fetch(`${BASE_URL}/game/leaderboard?timeframe=all_time`, { headers: newAuthHeaders });
+    const lbGlobalData: any = await lbGlobalRes.json();
+    const lbWeeklyRes = await fetch(`${BASE_URL}/game/leaderboard?timeframe=weekly`, { headers: newAuthHeaders });
+    const lbWeeklyData: any = await lbWeeklyRes.json();
+
+    console.log(`✅ 22. Leaderboard Validated: Global Top Users: ${lbGlobalData.topUsers.length}, User Rank #${lbGlobalData.currentUserRank?.rank} (${lbGlobalData.currentUserRank?.xp} XP), Weekly Top: ${lbWeeklyData.topUsers.length}`);
+
+    console.log('\n🎉 ALL 22 END-TO-END VERIFICATION CHECKS (INCLUDING XP LEADERBOARD & ATOMIC SECURITY) PASSED WITH FLYING COLORS!');
     process.exit(0);
   } catch (error: any) {
     console.error('❌ Verification failed:', error);

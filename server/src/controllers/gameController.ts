@@ -633,3 +633,163 @@ export async function buySticker(req: AuthRequest, res: Response): Promise<void>
   }
 }
 
+export async function getLeaderboard(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    const timeframe = (req.query.timeframe as string)?.toLowerCase() === 'weekly' ? 'weekly' : 'all_time';
+
+    if (timeframe === 'weekly') {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+      // Group completed approved tasks by user
+      const weeklyTaskGroups = await prisma.task.groupBy({
+        by: ['userId'],
+        where: {
+          status: 'APPROVED',
+          completedAt: { gte: sevenDaysAgo }
+        },
+        _sum: {
+          xpReward: true
+        },
+        orderBy: {
+          _sum: {
+            xpReward: 'desc'
+          }
+        },
+        take: 50
+      });
+
+      const userIds = weeklyTaskGroups.map(g => g.userId);
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        include: { gameData: true }
+      });
+
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const topUsers = weeklyTaskGroups.map((group, index) => {
+        const u = userMap.get(group.userId);
+        return {
+          rank: index + 1,
+          userId: group.userId,
+          username: u?.username || 'Mystic Alchemist',
+          level: u?.gameData?.level || 1,
+          xp: group._sum.xpReward || 0,
+          streak: u?.streak || 0,
+          pfpPath: u?.pfpPath || '/assets/avatars/default_alchemist.png',
+          bannerPath: u?.bannerPath || '/assets/banners/mystic_library.jpg'
+        };
+      });
+
+      let userWeeklyXp = 0;
+      if (userId) {
+        const userWeeklyTasks = await prisma.task.aggregate({
+          where: {
+            userId,
+            status: 'APPROVED',
+            completedAt: { gte: sevenDaysAgo }
+          },
+          _sum: {
+            xpReward: true
+          }
+        });
+        userWeeklyXp = userWeeklyTasks._sum.xpReward || 0;
+      }
+
+      let userRank = topUsers.findIndex(u => u.userId === userId) + 1;
+      if (userRank === 0 && userId) {
+        userRank = topUsers.length + 1;
+      }
+
+      const currentUser = userId ? await prisma.user.findUnique({ where: { id: userId }, include: { gameData: true } }) : null;
+
+      res.json({
+        timeframe: 'weekly',
+        topUsers,
+        currentUserRank: currentUser ? {
+          rank: userRank > 0 ? userRank : 1,
+          userId: currentUser.id,
+          username: currentUser.username,
+          level: currentUser.gameData?.level || 1,
+          xp: userWeeklyXp,
+          streak: currentUser.streak,
+          pfpPath: currentUser.pfpPath || '/assets/avatars/default_alchemist.png'
+        } : null
+      });
+      return;
+    }
+
+    // ALL_TIME Global Leaderboard
+    const topGameData = await prisma.gameData.findMany({
+      orderBy: { xp: 'desc' },
+      take: 50,
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            pfpPath: true,
+            bannerPath: true,
+            streak: true
+          }
+        }
+      }
+    });
+
+    const topUsers = topGameData.map((gd, idx) => ({
+      rank: idx + 1,
+      userId: gd.user.id,
+      username: gd.user.username,
+      level: gd.level,
+      xp: gd.xp,
+      streak: gd.user.streak,
+      pfpPath: gd.user.pfpPath || '/assets/avatars/default_alchemist.png',
+      bannerPath: gd.user.bannerPath || '/assets/banners/mystic_library.jpg'
+    }));
+
+    // Calculate authenticated user rank
+    let currentUserRank = null;
+    if (userId) {
+      const userGameData = await prisma.gameData.findUnique({
+        where: { userId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              pfpPath: true,
+              streak: true
+            }
+          }
+        }
+      });
+
+      if (userGameData) {
+        const higherCount = await prisma.gameData.count({
+          where: { xp: { gt: userGameData.xp } }
+        });
+
+        currentUserRank = {
+          rank: higherCount + 1,
+          userId: userGameData.user.id,
+          username: userGameData.user.username,
+          level: userGameData.level,
+          xp: userGameData.xp,
+          streak: userGameData.user.streak,
+          pfpPath: userGameData.user.pfpPath || '/assets/avatars/default_alchemist.png'
+        };
+      }
+    }
+
+    res.json({
+      timeframe: 'all_time',
+      topUsers,
+      currentUserRank
+    });
+  } catch (error) {
+    console.error('getLeaderboard error:', error);
+    res.status(500).json({ error: 'Failed to retrieve leaderboard rankings' });
+  }
+}
+
+

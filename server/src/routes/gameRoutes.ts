@@ -10,7 +10,8 @@ import {
   getShop,
   getStickers,
   buyBanner,
-  buySticker
+  buySticker,
+  getLeaderboard
 } from '../controllers/gameController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -29,6 +30,7 @@ router.get('/shop', getShop);
 router.get('/stickers', getStickers);
 router.post('/shop/buy-banner', buyBanner);
 router.post('/shop/buy-sticker', buySticker);
+router.get('/leaderboard', getLeaderboard);
 
 export default router;
 

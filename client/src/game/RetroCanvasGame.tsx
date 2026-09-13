@@ -100,6 +100,23 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
   const [activeStation, setActiveStation] = useState<ModalStation>(initialModal);
   const [nearbyStation, setNearbyStation] = useState<ModalStation>('NONE');
 
+  // Player & Game Loop Refs (Prevents frame-reinitialization and respawn glitches)
+  const playerRef = useRef({
+    x: 10 * 32,
+    y: 9 * 32,
+    speed: 3,
+    dir: 'DOWN' as 'DOWN' | 'UP' | 'LEFT' | 'RIGHT',
+    frame: 0,
+    animTimer: 0,
+    isMoving: false
+  });
+
+  const activeStationRef = useRef<ModalStation>(activeStation);
+  activeStationRef.current = activeStation;
+
+  const nearbyStationRef = useRef<ModalStation>(nearbyStation);
+  nearbyStationRef.current = nearbyStation;
+
   // Game Data states
   const [inventory, setInventory] = useState<{ itemId: number; quantity: number; item: { name: string; type: string; rarity: string; imagePath: string } }[]>([]);
   const [mailboxItems, setMailboxItems] = useState<{ id: number; message: string; isClaimed: boolean; item?: { name: string } }[]>([]);
@@ -112,6 +129,8 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
   const [focusDuration, setFocusDuration] = useState<number>(25); // minutes
   const [focusTimeLeft, setFocusTimeLeft] = useState<number>(0);
   const [isFocusing, setIsFocusing] = useState<boolean>(false);
+  const isFocusingRef = useRef<boolean>(isFocusing);
+  isFocusingRef.current = isFocusing;
   const [focusCompleted, setFocusCompleted] = useState<boolean>(false);
 
   // Load Inventory & Data
@@ -248,17 +267,6 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
     canvas.width = COLS * TILE_SIZE;  // 768px
     canvas.height = ROWS * TILE_SIZE; // 512px
 
-    // Player state
-    const player = {
-      x: 10 * TILE_SIZE,
-      y: 9 * TILE_SIZE,
-      speed: 3,
-      dir: 'DOWN' as 'DOWN' | 'UP' | 'LEFT' | 'RIGHT',
-      frame: 0,
-      animTimer: 0,
-      isMoving: false
-    };
-
     // Interactive Stations in the World
     const stations = [
       { id: 'MAILBOX' as ModalStation, x: 4 * TILE_SIZE, y: 7 * TILE_SIZE, label: '📬 Mailbox' },
@@ -266,6 +274,27 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
       { id: 'CUSTOMERS' as ModalStation, x: 18 * TILE_SIZE, y: 5 * TILE_SIZE, label: '🛒 Counter' },
       { id: 'GARDEN' as ModalStation, x: 4 * TILE_SIZE, y: 12 * TILE_SIZE, label: '🌿 Herb Garden' }
     ];
+
+    // Solid Obstacles for Physical Collision Resolution
+    const obstacles = [
+      { x: 4 * TILE_SIZE, y: 7 * TILE_SIZE, w: 32, h: 32 },       // Mailbox
+      { x: 10 * TILE_SIZE - 8, y: 4 * TILE_SIZE - 12, w: 48, h: 48 }, // Cauldron
+      { x: 18 * TILE_SIZE - 16, y: 5 * TILE_SIZE - 8, w: 80, h: 36 }  // Customer Counter
+    ];
+
+    const checkCollision = (boxX: number, boxY: number, boxW: number, boxH: number) => {
+      for (const obs of obstacles) {
+        if (
+          boxX < obs.x + obs.w &&
+          boxX + boxW > obs.x &&
+          boxY < obs.y + obs.h &&
+          boxY + boxH > obs.y
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
 
     const keys: Record<string, boolean> = {};
 
@@ -276,9 +305,9 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
       }
 
       // Proximity interaction on Space / E / Enter
-      if ((e.key === ' ' || e.key.toLowerCase() === 'e' || e.key === 'Enter') && nearbyStation !== 'NONE' && activeStation === 'NONE') {
+      if ((e.key === ' ' || e.key.toLowerCase() === 'e' || e.key === 'Enter') && nearbyStationRef.current !== 'NONE' && activeStationRef.current === 'NONE') {
         sound.playBlip();
-        setActiveStation(nearbyStation);
+        setActiveStation(nearbyStationRef.current);
       }
     };
 
@@ -292,11 +321,14 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
     let animationId: number;
 
     const render = () => {
+      const player = playerRef.current;
+      const currentActive = activeStationRef.current;
+
       // 1. Process Input & Move Player
       let dx = 0;
       let dy = 0;
 
-      if (activeStation === 'NONE') {
+      if (currentActive === 'NONE') {
         if (keys['arrowup'] || keys['w']) { dy -= player.speed; player.dir = 'UP'; }
         if (keys['arrowdown'] || keys['s']) { dy += player.speed; player.dir = 'DOWN'; }
         if (keys['arrowleft'] || keys['a']) { dx -= player.speed; player.dir = 'LEFT'; }
@@ -305,9 +337,27 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
 
       player.isMoving = dx !== 0 || dy !== 0;
 
-      // Update position with boundary checks
-      player.x = Math.max(TILE_SIZE, Math.min(canvas.width - TILE_SIZE * 2, player.x + dx));
-      player.y = Math.max(TILE_SIZE * 3, Math.min(canvas.height - TILE_SIZE * 2, player.y + dy));
+      // Separate X and Y Axis Movement & Physical Collision Resolution
+      const playerHitboxW = 16;
+      const playerHitboxH = 14;
+
+      if (dx !== 0) {
+        const nextX = Math.max(TILE_SIZE, Math.min(canvas.width - TILE_SIZE * 2, player.x + dx));
+        const hitboxX = nextX + 8;
+        const hitboxY = player.y + 16;
+        if (!checkCollision(hitboxX, hitboxY, playerHitboxW, playerHitboxH)) {
+          player.x = nextX;
+        }
+      }
+
+      if (dy !== 0) {
+        const nextY = Math.max(TILE_SIZE * 2.2, Math.min(canvas.height - TILE_SIZE * 2, player.y + dy));
+        const hitboxX = player.x + 8;
+        const hitboxY = nextY + 16;
+        if (!checkCollision(hitboxX, hitboxY, playerHitboxW, playerHitboxH)) {
+          player.y = nextY;
+        }
+      }
 
       // Animation frame step
       if (player.isMoving) {
@@ -320,16 +370,22 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
         player.frame = 0;
       }
 
-      // Check proximity to stations
+      // Proximity Detection for Stations (Separate from Physical Collision)
       let currentNearby: ModalStation = 'NONE';
+      const playerCenterX = player.x + 16;
+      const playerCenterY = player.y + 16;
+
       for (const st of stations) {
-        const dist = Math.hypot(player.x - st.x, player.y - st.y);
-        if (dist < TILE_SIZE * 1.8) {
+        const dist = Math.hypot(playerCenterX - (st.x + 16), playerCenterY - (st.y + 16));
+        if (dist < TILE_SIZE * 2.0) {
           currentNearby = st.id;
           break;
         }
       }
-      setNearbyStation(currentNearby);
+
+      if (nearbyStationRef.current !== currentNearby) {
+        setNearbyStation(currentNearby);
+      }
 
       // ---------------------------------------------------------
       // DRAW WORLD MAP (Pokemon Red / Retro Pixel Aesthetic)
@@ -358,13 +414,13 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
               ctx.fillRect(px + 2, py + 2, TILE_SIZE - 4, TILE_SIZE - 4);
 
               // Sprout flowers in garden
-              ctx.fillStyle = isFocusing ? '#70e000' : '#d8f3dc';
+              ctx.fillStyle = isFocusingRef.current ? '#70e000' : '#d8f3dc';
               ctx.beginPath();
               ctx.arc(px + 16, py + 16, 5, 0, Math.PI * 2);
               ctx.fill();
 
               // Glowing flower bud
-              ctx.fillStyle = isFocusing ? '#ffd166' : '#9d4edd';
+              ctx.fillStyle = isFocusingRef.current ? '#ffd166' : '#9d4edd';
               ctx.beginPath();
               ctx.arc(px + 16, py + 16, 2.5, 0, Math.PI * 2);
               ctx.fill();
@@ -495,7 +551,7 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
       ctx.fillRect(px + 18, py + 28 - legOffset, 6, 4);
 
       // E. Proximity Interaction HUD Banner
-      if (currentNearby !== 'NONE' && activeStation === 'NONE') {
+      if (currentNearby !== 'NONE' && currentActive === 'NONE') {
         const found = stations.find(s => s.id === currentNearby);
         if (found) {
           ctx.fillStyle = 'rgba(15, 15, 27, 0.9)';
@@ -522,7 +578,7 @@ export const RetroCanvasGame: React.FC<{ initialModal?: ModalStation }> = ({ ini
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [activeStation, nearbyStation, isFocusing]);
+  }, []);
 
   return (
     <div className="relative w-full max-w-5xl mx-auto flex flex-col items-center select-none">

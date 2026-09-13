@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { sound } from '../utils/audio';
+import { getXpProgress } from '../utils/levelUtils';
 import {
   FlaskConical,
   Flame,
@@ -53,9 +54,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenM
   const streak = user.streak || 0;
   const multiplier = Math.min(3.0, 1.0 + (streak * 0.1)).toFixed(1);
   const xp = user.gameData?.xp || 0;
-  const level = user.gameData?.level || 1;
-  const currentLevelXp = xp % 100;
+  const { level, currentLevelXp, xpNeededForLevel, progressPercent } = getXpProgress(xp);
   const gold = user.gameData?.gold || 0;
+
 
   return (
     <header className="sticky top-0 z-40 bg-[#0f0f1b]/95 backdrop-blur-md border-b border-purple-900/40 shadow-xl px-4 py-3">
@@ -144,15 +145,15 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onOpenM
           </div>
 
           {/* Level & XP Bar */}
-          <div className="flex flex-col gap-0.5 min-w-[110px] bg-[#16213e] px-2.5 py-1 rounded-lg border border-purple-500/30">
+          <div className="flex flex-col gap-0.5 min-w-[125px] bg-[#16213e] px-2.5 py-1 rounded-lg border border-purple-500/30">
             <div className="flex justify-between items-center text-[10px] text-purple-300 font-semibold">
               <span>Lv. {level}</span>
-              <span className="text-slate-400">{currentLevelXp}/100 XP</span>
+              <span className="text-slate-400">{currentLevelXp}/{xpNeededForLevel} XP</span>
             </div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
               <div
                 className="bg-gradient-to-r from-purple-500 to-teal-400 h-full transition-all duration-500"
-                style={{ width: `${currentLevelXp}%` }}
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>

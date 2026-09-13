@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../prisma/client';
 import { RECIPES } from '../prisma/seed';
+import { calculateLevel } from '../utils/levelUtils';
 
 export async function getInventory(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -108,7 +109,7 @@ export async function claimMailbox(req: AuthRequest, res: Response): Promise<voi
       const gameData = await prisma.gameData.findUnique({ where: { userId } });
       const newXp = (gameData?.xp || 0) + addedXp;
       const newGold = (gameData?.gold || 0) + addedGold;
-      const newLevel = Math.floor(newXp / 100) + 1;
+      const newLevel = calculateLevel(newXp);
 
       await prisma.gameData.update({
         where: { userId },
@@ -195,7 +196,7 @@ export async function craftPotion(req: AuthRequest, res: Response): Promise<void
     // Grant Crafting XP
     const gameData = await prisma.gameData.findUnique({ where: { userId } });
     const newXp = (gameData?.xp || 0) + recipe.xpYield;
-    const newLevel = Math.floor(newXp / 100) + 1;
+    const newLevel = calculateLevel(newXp);
 
     await prisma.gameData.update({
       where: { userId },
@@ -293,7 +294,7 @@ export async function fulfillNpcOrder(req: AuthRequest, res: Response): Promise<
     const gameData = await prisma.gameData.findUnique({ where: { userId } });
     const newGold = (gameData?.gold || 0) + order.goldReward;
     const newXp = (gameData?.xp || 0) + 40;
-    const newLevel = Math.floor(newXp / 100) + 1;
+    const newLevel = calculateLevel(newXp);
 
     await prisma.gameData.update({
       where: { userId },

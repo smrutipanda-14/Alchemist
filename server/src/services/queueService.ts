@@ -1,4 +1,5 @@
 import prisma from '../prisma/client';
+import { calculateLevel } from '../utils/levelUtils';
 
 interface QueueJob {
   taskId: number;
@@ -99,9 +100,9 @@ class TaskQueue {
         });
       }
 
-      // 4. Update Game Profile (XP, Level)
+      // 4. Update Game Profile (XP, Level) with Non-Linear RPG Curve
       const currentXp = (task.user.gameData?.xp || 0) + calculatedXp;
-      const newLevel = Math.floor(currentXp / 100) + 1; // 100 XP per level
+      const newLevel = calculateLevel(currentXp);
 
       await prisma.gameData.upsert({
         where: { userId: task.userId },

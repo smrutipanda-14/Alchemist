@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api'
+  baseURL: 'http://ak8.hopto.org:25565/api'
 });
 
 api.interceptors.request.use((config) => {

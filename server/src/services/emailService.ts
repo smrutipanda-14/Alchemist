@@ -1,9 +1,14 @@
 import nodemailer from 'nodemailer';
 
 let transporter: nodemailer.Transporter | null = null;
+const isConfigured = Boolean(
+  process.env.EMAIL_USER &&
+  process.env.EMAIL_PASS &&
+  process.env.EMAIL_PASS !== 'demopassword'
+);
 
-try {
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.EMAIL_PASS !== 'demopassword') {
+if (isConfigured) {
+  try {
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -11,9 +16,22 @@ try {
         pass: process.env.EMAIL_PASS
       }
     });
+
+    // Non-blocking verification of transporter credentials
+    transporter.verify((err) => {
+      if (err) {
+        console.warn('⚠️ [Nodemailer] SMTP verification failed with configured credentials:', err.message);
+        console.warn('   Emails will fallback to server console logs.');
+      } else {
+        console.log('📬 [Nodemailer] Gmail SMTP transporter ready for live outbound emails.');
+      }
+    });
+  } catch (e) {
+    console.warn('⚠️ [Nodemailer] Transporter initialization warning:', e);
   }
-} catch (e) {
-  console.warn("⚠️ Nodemailer configuration warning:", e);
+} else {
+  console.log('ℹ️ [Nodemailer] EMAIL_USER / EMAIL_PASS not set. Running in development console-dispatch mode.');
+  console.log('   To enable live emails, generate a Google App Password and add EMAIL_USER & EMAIL_PASS to server/.env');
 }
 
 export async function sendVerificationEmail(email: string, code: string, username: string): Promise<boolean> {
@@ -32,11 +50,12 @@ export async function sendVerificationEmail(email: string, code: string, usernam
     </div>
   `;
 
-  console.log(`\n================ EMAIL DISPATCH ================`);
+  console.log(`\n================ EMAIL DISPATCH (DEV & AUDIT) ================`);
   console.log(`To: ${email}`);
   console.log(`Subject: ${subject}`);
   console.log(`Verification Code: ${code}`);
-  console.log(`================================================\n`);
+  console.log(`Status: ${transporter ? 'Attempting live SMTP dispatch...' : 'Logged locally (development mode)'}`);
+  console.log(`==============================================================\n`);
 
   if (transporter) {
     try {
@@ -46,9 +65,10 @@ export async function sendVerificationEmail(email: string, code: string, usernam
         subject,
         html
       });
+      console.log(`✅ [Nodemailer] Verification email sent to ${email}`);
       return true;
-    } catch (err) {
-      console.error("Failed to send real email via transporter:", err);
+    } catch (err: any) {
+      console.error(`❌ [Nodemailer] Failed to send real email to ${email}:`, err.message);
     }
   }
 
@@ -71,11 +91,12 @@ export async function sendPasswordResetEmail(email: string, otp: string, usernam
     </div>
   `;
 
-  console.log(`\n================ EMAIL DISPATCH ================`);
+  console.log(`\n================ EMAIL DISPATCH (DEV & AUDIT) ================`);
   console.log(`To: ${email}`);
   console.log(`Subject: ${subject}`);
   console.log(`Password Reset OTP: ${otp}`);
-  console.log(`================================================\n`);
+  console.log(`Status: ${transporter ? 'Attempting live SMTP dispatch...' : 'Logged locally (development mode)'}`);
+  console.log(`==============================================================\n`);
 
   if (transporter) {
     try {
@@ -85,11 +106,13 @@ export async function sendPasswordResetEmail(email: string, otp: string, usernam
         subject,
         html
       });
+      console.log(`✅ [Nodemailer] Password reset email sent to ${email}`);
       return true;
-    } catch (err) {
-      console.error("Failed to send real reset email via transporter:", err);
+    } catch (err: any) {
+      console.error(`❌ [Nodemailer] Failed to send real reset email to ${email}:`, err.message);
     }
   }
 
   return true;
 }
+

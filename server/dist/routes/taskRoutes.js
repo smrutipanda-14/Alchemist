@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const taskController_1 = require("../controllers/taskController");
+const auth_1 = require("../middleware/auth");
+const upload_1 = require("../middleware/upload");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticateToken);
+router.get('/pool', taskController_1.getDailyTaskPool);
+router.post('/daily', taskController_1.setDailyTasks);
+router.get('/dashboard', taskController_1.getDashboardTasks);
+router.post('/todo', taskController_1.createTodoTask);
+router.post('/proof', upload_1.upload.single('proof'), taskController_1.submitTaskProof);
+router.get('/itinerary', taskController_1.getItinerary);
+exports.default = router;

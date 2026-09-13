@@ -452,13 +452,58 @@ export async function completeGardenFocus(req: AuthRequest, res: Response): Prom
 
 export async function getShop(req: AuthRequest, res: Response): Promise<void> {
   try {
+    const userId = req.user?.id;
     const banners = await prisma.bannerCosmetic.findMany();
-    const stickers = await prisma.stickerCosmetic.findMany();
-    res.json({ banners, stickers });
+    const stickers = await (prisma as any).sticker.findMany();
+
+    let ownedStickerIds: number[] = [];
+    if (userId) {
+      const userStickers = await (prisma as any).userSticker.findMany({
+        where: { userId },
+        select: { stickerId: true }
+      });
+      ownedStickerIds = userStickers.map((us: any) => us.stickerId);
+    }
+
+    const enrichedStickers = stickers.map((s: any) => ({
+      ...s,
+      priceGold: s.goldCost,
+      isOwned: ownedStickerIds.includes(s.id)
+    }));
+
+    res.json({ banners, stickers: enrichedStickers });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch shop items' });
   }
 }
+
+export async function getStickers(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const stickers = await (prisma as any).sticker.findMany();
+    const userStickers = await (prisma as any).userSticker.findMany({
+      where: { userId },
+      select: { stickerId: true }
+    });
+    const ownedSet = new Set(userStickers.map((us: any) => us.stickerId));
+
+    const enriched = stickers.map((s: any) => ({
+      ...s,
+      priceGold: s.goldCost,
+      isOwned: ownedSet.has(s.id)
+    }));
+
+    res.json({ stickers: enriched });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch stickers' });
+  }
+}
+
 
 export async function buyBanner(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -503,3 +548,87 @@ export async function buyBanner(req: AuthRequest, res: Response): Promise<void> 
     res.status(500).json({ error: 'Failed to buy banner' });
   }
 }
+
+export async function buySticker(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    const { stickerId } = req.body;
+
+    if (!userId || !stickerId) {
+      res.status(400).json({ error: 'Sticker ID is required' });
+      return;
+    }
+
+    // Execute atomic transaction for gold deduction & duplicate-free purchase
+    const result = await prisma.$transaction(async (tx) => {
+      const sticker = await (tx as any).sticker.findUnique({
+        where: { id: stickerId }
+      });
+
+      if (!sticker) {
+        throw new Error('NOT_FOUND: Sticker not found');
+      }
+
+      // Check if already owned
+      const existing = await (tx as any).userSticker.findUnique({
+        where: {
+          userId_stickerId: { userId, stickerId }
+        }
+      });
+
+      if (existing) {
+        throw new Error('ALREADY_OWNED: You already own this mystical sticker!');
+      }
+
+      // Check user gold
+      const gameData = await tx.gameData.findUnique({
+        where: { userId }
+      });
+
+      if (!gameData || gameData.gold < sticker.goldCost) {
+        throw new Error(`INSUFFICIENT_GOLD: Need ${sticker.goldCost} Gold (You have ${gameData?.gold || 0} Gold).`);
+      }
+
+      // 1. Deduct gold
+      const updatedGameData = await tx.gameData.update({
+        where: { userId },
+        data: { gold: gameData.gold - sticker.goldCost }
+      });
+
+      // 2. Insert UserSticker
+      const userSticker = await (tx as any).userSticker.create({
+        data: {
+          userId,
+          stickerId
+        },
+        include: { sticker: true }
+      });
+
+      return {
+        sticker,
+        userSticker,
+        newGold: updatedGameData.gold
+      };
+    });
+
+
+    res.json({
+      message: `✨ Successfully acquired ${result.sticker.name}!`,
+      sticker: result.sticker,
+      newGold: result.newGold
+    });
+  } catch (error: any) {
+    const errMsg = error.message || '';
+    if (errMsg.startsWith('NOT_FOUND:')) {
+      res.status(404).json({ error: errMsg.replace('NOT_FOUND: ', '') });
+    } else if (errMsg.startsWith('ALREADY_OWNED:')) {
+      res.status(400).json({ error: errMsg.replace('ALREADY_OWNED: ', '') });
+    } else if (errMsg.startsWith('INSUFFICIENT_GOLD:')) {
+      res.status(400).json({ error: errMsg.replace('INSUFFICIENT_GOLD: ', '') });
+    } else {
+      console.error('buySticker transaction error:', error);
+      res.status(500).json({ error: 'Failed to complete sticker purchase' });
+    }
+  }
+}
+

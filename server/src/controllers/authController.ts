@@ -163,7 +163,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const user = await prisma.user.findFirst({
+    const user: any = await prisma.user.findFirst({
       where: {
         OR: [
           { username: usernameOrEmail },
@@ -172,8 +172,9 @@ export async function login(req: Request, res: Response): Promise<void> {
       },
       include: {
         gameData: true,
-        userBadges: { include: { badge: true } }
-      }
+        userBadges: { include: { badge: true } },
+        userStickers: { include: { sticker: true } }
+      } as any
     });
 
     if (!user) {
@@ -206,7 +207,8 @@ export async function login(req: Request, res: Response): Promise<void> {
         isEmailVerified: user.isEmailVerified,
         streak: user.streak,
         gameData: user.gameData,
-        badges: user.userBadges.map(ub => ub.badge)
+        badges: user.userBadges?.map((ub: any) => ub.badge) || [],
+        stickers: user.userStickers?.map((us: any) => us.sticker) || []
       }
     });
   } catch (error) {
@@ -276,7 +278,7 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
     // INCREMENT TOKEN VERSION: invalidates all previous sessions!
-    const updatedUser = await prisma.user.update({
+    const updatedUser: any = await prisma.user.update({
       where: { id: user.id },
       data: {
         passwordHash,
@@ -284,7 +286,11 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
         resetOtp: null,
         resetOtpExpires: null
       },
-      include: { gameData: true }
+      include: {
+        gameData: true,
+        userBadges: { include: { badge: true } },
+        userStickers: { include: { sticker: true } }
+      } as any
     });
 
     // Issue a fresh token
@@ -305,7 +311,9 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
         bannerPath: updatedUser.bannerPath,
         bio: updatedUser.bio,
         streak: updatedUser.streak,
-        gameData: updatedUser.gameData
+        gameData: updatedUser.gameData,
+        badges: updatedUser.userBadges?.map((ub: any) => ub.badge) || [],
+        stickers: updatedUser.userStickers?.map((us: any) => us.sticker) || []
       }
     });
   } catch (error) {
@@ -322,14 +330,15 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
       return;
     }
 
-    const user = await prisma.user.findUnique({
+    const user: any = await prisma.user.findUnique({
       where: { id: userId },
       include: {
         gameData: true,
         userData: true,
         userBadges: { include: { badge: true } },
+        userStickers: { include: { sticker: true } },
         userInventory: { include: { item: true } }
-      }
+      } as any
     });
 
     if (!user) {
@@ -350,8 +359,9 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
         createdAt: user.createdAt,
         gameData: user.gameData,
         userData: user.userData,
-        badges: user.userBadges.map(ub => ub.badge),
-        inventory: user.userInventory
+        badges: user.userBadges?.map((ub: any) => ub.badge) || [],
+        stickers: user.userStickers?.map((us: any) => us.sticker) || [],
+        inventory: user.userInventory || []
       }
     });
   } catch (error) {

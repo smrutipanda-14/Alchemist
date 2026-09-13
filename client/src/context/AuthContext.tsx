@@ -16,6 +16,16 @@ export interface Badge {
   rarity: string;
 }
 
+export interface Sticker {
+  id: number;
+  name: string;
+  imagePath: string;
+  goldCost: number;
+  priceGold?: number;
+  category?: string;
+  isOwned?: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -27,6 +37,7 @@ export interface User {
   streak: number;
   gameData?: GameData;
   badges?: Badge[];
+  stickers?: Sticker[];
 }
 
 interface AuthContextType {

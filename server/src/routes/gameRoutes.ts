@@ -8,7 +8,9 @@ import {
   fulfillNpcOrder,
   completeGardenFocus,
   getShop,
-  buyBanner
+  getStickers,
+  buyBanner,
+  buySticker
 } from '../controllers/gameController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -24,6 +26,9 @@ router.get('/orders', getNpcOrders);
 router.post('/orders/fulfill', fulfillNpcOrder);
 router.post('/garden/harvest', completeGardenFocus);
 router.get('/shop', getShop);
+router.get('/stickers', getStickers);
 router.post('/shop/buy-banner', buyBanner);
+router.post('/shop/buy-sticker', buySticker);
 
 export default router;
+

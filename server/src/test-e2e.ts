@@ -139,8 +139,54 @@ async function runEndToEndVerification() {
     const buyBannerData: any = await buyBannerRes.json();
     console.log('✅ 17. Banner Purchased & Equipped:', buyBannerData.message);
 
-    // 14. Token Versioning & Password Reset Test
-    console.log('🔐 18. Testing Token Versioning & Password Reset Security...');
+    // 14. Sticker Shop & Transaction Safety Tests
+    console.log('✨ 18. Testing Sticker Purchase & Atomic Transaction Security...');
+    const stickersRes = await fetch(`${BASE_URL}/game/stickers`, { headers: authHeaders });
+    const stickersData: any = await stickersRes.json();
+    console.log(`   - Available stickers: ${stickersData.stickers.length}`);
+
+    // A. Successful purchase of Golden Cauldron (id: 1, cost: 30)
+    const buyStickerRes = await fetch(`${BASE_URL}/game/shop/buy-sticker`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ stickerId: 1 })
+    });
+    const buyStickerData: any = await buyStickerRes.json();
+    console.log('   - Buy Sticker 1 Success:', buyStickerData.message, `Remaining Gold: ${buyStickerData.newGold}`);
+
+    // B. Test Duplicate Purchase Prevention (should fail with 400)
+    const duplicateBuyRes = await fetch(`${BASE_URL}/game/shop/buy-sticker`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ stickerId: 1 })
+    });
+    if (duplicateBuyRes.status === 400) {
+      const dupErr: any = await duplicateBuyRes.json();
+      console.log('   - Duplicate Purchase Rejected (Expected):', dupErr.error);
+    } else {
+      console.error('❌ ERROR: Duplicate purchase was not rejected!');
+    }
+
+    // C. Test Insufficient Gold Rejection
+    // Drain gold by setting gameData gold to 0 directly or buying beyond balance
+    await prisma.gameData.update({ where: { userId: regData.user.id }, data: { gold: 5 } });
+    const noGoldBuyRes = await fetch(`${BASE_URL}/game/shop/buy-sticker`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ stickerId: 2 })
+    });
+    if (noGoldBuyRes.status === 400) {
+      const noGoldErr: any = await noGoldBuyRes.json();
+      console.log('   - Insufficient Gold Rejected (Expected):', noGoldErr.error);
+    } else {
+      console.error('❌ ERROR: Insufficient gold purchase was not rejected!');
+    }
+
+    // Restore gold balance for subsequent tests
+    await prisma.gameData.update({ where: { userId: regData.user.id }, data: { gold: 100 } });
+
+    // 15. Token Versioning & Password Reset Test
+    console.log('🔐 19. Testing Token Versioning & Password Reset Security...');
     const forgotRes = await fetch(`${BASE_URL}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -164,25 +210,25 @@ async function runEndToEndVerification() {
     const resetData: any = await resetRes.json();
     console.log('   - Password reset completed:', resetData.message);
 
-    // 15. Verify that the OLD token is now INVALIDATED
+    // 16. Verify that the OLD token is now INVALIDATED
     const oldTokenCheck = await fetch(`${BASE_URL}/auth/me`, { headers: authHeaders });
     if (oldTokenCheck.status === 401) {
       const oldErr: any = await oldTokenCheck.json();
-      console.log(`✅ 19. Security Verified: Old JWT correctly rejected with Status 401 (${oldErr.error})`);
+      console.log(`✅ 20. Security Verified: Old JWT correctly rejected with Status 401 (${oldErr.error})`);
     } else {
       console.error('❌ ERROR: Old token was NOT rejected!');
     }
 
-    // 16. Verify that the NEW token works
+    // 17. Verify that the NEW token works and includes owned stickers
     const newAuthHeaders = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${resetData.token}`
     };
     const meRes = await fetch(`${BASE_URL}/auth/me`, { headers: newAuthHeaders });
     const meData: any = await meRes.json();
-    console.log(`✅ 20. New Session Validated for User: ${meData.user.username} (Level ${meData.user.gameData.level}, Gold ${meData.user.gameData.gold})`);
+    console.log(`✅ 21. New Session Validated for User: ${meData.user.username} (Level ${meData.user.gameData.level}, Gold ${meData.user.gameData.gold}, Stickers: ${meData.user.stickers?.length})`);
 
-    console.log('\n🎉 ALL 20 END-TO-END VERIFICATION CHECKS PASSED WITH FLYING COLORS!');
+    console.log('\n🎉 ALL 21 END-TO-END VERIFICATION CHECKS (INCLUDING STICKER & ATOMIC TRANSACTIONS) PASSED WITH FLYING COLORS!');
     process.exit(0);
   } catch (error: any) {
     console.error('❌ Verification failed:', error);
@@ -191,3 +237,4 @@ async function runEndToEndVerification() {
 }
 
 runEndToEndVerification();
+

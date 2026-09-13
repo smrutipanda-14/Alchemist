@@ -33,6 +33,7 @@ model User {
   userBadges       UserBadge[]
   mailbox          MailboxItem[]
   focusSessions    FocusSession[]
+  userStickers     UserSticker[]
 
   @@index([id])
   @@index([username])
@@ -190,10 +191,24 @@ model BannerCosmetic {
   description String
 }
 
-model StickerCosmetic {
-  id          Int    @id @default(autoincrement())
-  name        String
-  imagePath   String
-  priceGold   Int
-  category    String
+model Sticker {
+  id           Int           @id @default(autoincrement())
+  name         String
+  imagePath    String
+  goldCost     Int           @default(30)
+  category     String?       @default("alchemy")
+  userStickers UserSticker[]
 }
+
+model UserSticker {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stickerId   Int
+  sticker     Sticker  @relation(fields: [stickerId], references: [id], onDelete: Cascade)
+  purchasedAt DateTime @default(now())
+
+  @@unique([userId, stickerId])
+  @@index([userId])
+}
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, Sticker } from '../context/AuthContext';
 import { sound } from '../utils/audio';
 import {
   User as UserIcon,
@@ -10,7 +10,9 @@ import {
   ShoppingBag,
   Edit3,
   Check,
-  Image as ImageIcon
+  Image as ImageIcon,
+  CheckCircle2,
+  Sparkle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import api from '../api/client';
@@ -23,14 +25,6 @@ interface BannerCosmetic {
   description: string;
 }
 
-interface StickerCosmetic {
-  id: number;
-  name: string;
-  imagePath: string;
-  priceGold: number;
-  category: string;
-}
-
 export const ProfilePage: React.FC = () => {
   const { user, refreshProfile, updateGameStats } = useAuth();
 
@@ -41,20 +35,23 @@ export const ProfilePage: React.FC = () => {
 
   // Shop states
   const [banners, setBanners] = useState<BannerCosmetic[]>([]);
-  const [stickers, setStickers] = useState<StickerCosmetic[]>([]);
-  const [buyingId, setBuyingId] = useState<number | null>(null);
+  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [buyingBannerId, setBuyingBannerId] = useState<number | null>(null);
+  const [buyingStickerId, setBuyingStickerId] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const fetchShop = async () => {
+    try {
+      const res = await api.get('/game/shop');
+      setBanners(res.data.banners || []);
+      setStickers(res.data.stickers || []);
+    } catch (e) {
+      console.error('Failed to load shop', e);
+    }
+  };
 
   useEffect(() => {
-    const fetchShop = async () => {
-      try {
-        const res = await api.get('/game/shop');
-        setBanners(res.data.banners || []);
-        setStickers(res.data.stickers || []);
-      } catch (e) {
-        console.error('Failed to load shop', e);
-      }
-    };
     fetchShop();
   }, []);
 
@@ -89,11 +86,12 @@ export const ProfilePage: React.FC = () => {
   const handleBuyBanner = async (banner: BannerCosmetic) => {
     const currentGold = user?.gameData?.gold || 0;
     if (currentGold < banner.priceGold) {
-      alert(`Insufficient gold! You need ${banner.priceGold} Gold.`);
+      setErrorMessage(`Insufficient gold! You need ${banner.priceGold} Gold.`);
       return;
     }
 
-    setBuyingId(banner.id);
+    setBuyingBannerId(banner.id);
+    setErrorMessage(null);
     sound.playBlip();
 
     try {
@@ -104,9 +102,50 @@ export const ProfilePage: React.FC = () => {
       updateGameStats({ gold: res.data.newGold });
       await refreshProfile();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to purchase banner');
+      setErrorMessage(err.response?.data?.error || 'Failed to purchase banner');
     } finally {
-      setBuyingId(null);
+      setBuyingBannerId(null);
+    }
+  };
+
+  const handleBuySticker = async (sticker: Sticker) => {
+    const currentGold = user?.gameData?.gold || 0;
+    const cost = sticker.priceGold ?? sticker.goldCost;
+
+    if (sticker.isOwned) {
+      setErrorMessage('You already possess this sticker!');
+      return;
+    }
+
+    if (currentGold < cost) {
+      setErrorMessage(`Insufficient gold! Need ${cost} Gold.`);
+      return;
+    }
+
+    setBuyingStickerId(sticker.id);
+    setErrorMessage(null);
+    sound.playBlip();
+
+    // Optimistic UI update
+    const previousGold = currentGold;
+    updateGameStats({ gold: currentGold - cost });
+    setStickers(prev => prev.map(s => s.id === sticker.id ? { ...s, isOwned: true } : s));
+
+    try {
+      const res = await api.post('/game/shop/buy-sticker', { stickerId: sticker.id });
+      sound.playCoin();
+      confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+      setStatusMessage(res.data.message);
+      updateGameStats({ gold: res.data.newGold });
+      await refreshProfile();
+      await fetchShop();
+    } catch (err: any) {
+      // Rollback on error
+      updateGameStats({ gold: previousGold });
+      setStickers(prev => prev.map(s => s.id === sticker.id ? { ...s, isOwned: false } : s));
+      setErrorMessage(err.response?.data?.error || 'Failed to purchase sticker');
+    } finally {
+      setBuyingStickerId(null);
     }
   };
 
@@ -118,6 +157,7 @@ export const ProfilePage: React.FC = () => {
   const level = user.gameData?.level || 1;
   const gold = user.gameData?.gold || 0;
   const badges = user.badges || [];
+  const ownedStickers = user.stickers || [];
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fadeIn pb-16">
@@ -245,7 +285,39 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. BADGES & TROPHY CABINET */}
+      {/* 2. OWNED STICKERS & GRIMOIRE EMBLEMS SHOWCASE */}
+      <div className="bg-[#16213e] p-6 rounded-2xl border border-teal-900/50 space-y-4 shadow-xl">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-teal-950/80 border border-teal-500/40 text-teal-400">
+            <Sparkle className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg font-cinzel text-teal-200">Grimoire Stickers & Collected Emblems</h3>
+            <p className="text-xs text-slate-400">Permanent cosmetic stickers unlocked through the Golden Emporium.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+          {ownedStickers.length === 0 ? (
+            <div className="col-span-full text-center py-6 text-slate-500 text-xs">
+              No mystical stickers acquired yet. Visit the Golden Emporium below to collect stickers!
+            </div>
+          ) : (
+            ownedStickers.map(sticker => (
+              <div
+                key={sticker.id}
+                className="p-3 rounded-xl bg-[#0f0f1b] border border-teal-500/40 text-center space-y-1 shadow-md hover:scale-105 transition-transform"
+              >
+                <div className="text-3xl py-1">✨</div>
+                <h5 className="text-xs font-bold text-teal-300">{sticker.name}</h5>
+                <span className="text-[10px] text-teal-400/80 font-pixel uppercase block">{sticker.category || 'Alchemy'}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* 3. BADGES & TROPHY CABINET */}
       <div className="bg-[#16213e] p-6 rounded-2xl border border-purple-900/50 space-y-4 shadow-xl">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-lg bg-amber-950/80 border border-amber-500/40 text-amber-400">
@@ -281,7 +353,7 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. GOLD EMPORIUM & COSMETICS SHOP */}
+      {/* 4. GOLD EMPORIUM & COSMETICS SHOP */}
       <div className="bg-[#16213e] p-6 rounded-2xl border border-amber-900/50 space-y-6 shadow-xl">
         <div className="flex justify-between items-center border-b border-amber-900/40 pb-3">
           <div className="flex items-center gap-2.5">
@@ -299,11 +371,18 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Message Banner */}
+        {/* Status Alerts */}
         {statusMessage && (
-          <div className="p-3 rounded-xl bg-amber-900/40 border border-amber-500/40 text-amber-200 text-xs font-semibold flex items-center justify-between">
+          <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs font-semibold flex items-center justify-between animate-fadeIn">
             <span>{statusMessage}</span>
-            <button onClick={() => setStatusMessage(null)} className="text-amber-400 hover:text-white">✕</button>
+            <button onClick={() => setStatusMessage(null)} className="text-emerald-400 hover:text-white">✕</button>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs font-semibold flex items-center justify-between animate-fadeIn">
+            <span>{errorMessage}</span>
+            <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-white">✕</button>
           </div>
         )}
 
@@ -326,11 +405,11 @@ export const ProfilePage: React.FC = () => {
 
                 <button
                   onClick={() => handleBuyBanner(b)}
-                  disabled={buyingId === b.id || gold < b.priceGold}
+                  disabled={buyingBannerId === b.id || gold < b.priceGold}
                   className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md glow-gold disabled:opacity-35 transition-all flex items-center justify-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>{gold < b.priceGold ? 'Need More Gold' : 'Purchase & Equip'}</span>
+                  <span>{buyingBannerId === b.id ? 'Equipping...' : gold < b.priceGold ? 'Need More Gold' : 'Purchase & Equip'}</span>
                 </button>
               </div>
             ))}
@@ -341,23 +420,41 @@ export const ProfilePage: React.FC = () => {
         <div className="space-y-3 pt-3 border-t border-slate-800">
           <h4 className="text-xs font-bold font-pixel text-teal-300">MYSTICAL STICKERS & EMBLEMS</h4>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {stickers.map(s => (
-              <div
-                key={s.id}
-                className="p-3 rounded-xl bg-[#0f0f1b] border border-slate-800 text-center space-y-2"
-              >
-                <div className="text-3xl py-1">✨</div>
-                <h5 className="text-xs font-bold text-slate-200">{s.name}</h5>
-                <span className="text-[11px] text-amber-400 font-semibold block">{s.priceGold} Gold</span>
-                <button
-                  onClick={() => { sound.playCoin(); alert(`Purchased ${s.name}!`); }}
-                  disabled={gold < s.priceGold}
-                  className="w-full py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[10px] font-bold disabled:opacity-40"
+            {stickers.map(s => {
+              const cost = s.priceGold ?? s.goldCost;
+              const isOwned = s.isOwned || ownedStickers.some(os => os.id === s.id);
+
+              return (
+                <div
+                  key={s.id}
+                  className={`p-3.5 rounded-xl border text-center space-y-2 transition-all ${
+                    isOwned
+                      ? 'bg-teal-950/20 border-teal-500/40'
+                      : 'bg-[#0f0f1b] border-slate-800'
+                  }`}
                 >
-                  Buy
-                </button>
-              </div>
-            ))}
+                  <div className="text-3xl py-1">✨</div>
+                  <h5 className="text-xs font-bold text-slate-200">{s.name}</h5>
+                  <span className="text-[11px] text-amber-400 font-semibold block">{cost} Gold</span>
+                  
+                  {isOwned ? (
+                    <div className="w-full py-1.5 bg-teal-950/60 border border-teal-500/40 text-teal-300 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Owned</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleBuySticker(s)}
+                      disabled={buyingStickerId === s.id || gold < cost}
+                      className="w-full py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white rounded-lg text-[10px] font-bold shadow transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>{buyingStickerId === s.id ? 'Purchasing...' : 'Buy'}</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -366,3 +463,4 @@ export const ProfilePage: React.FC = () => {
     </div>
   );
 };
+

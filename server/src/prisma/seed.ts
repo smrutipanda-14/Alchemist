@@ -128,14 +128,14 @@ export const INITIAL_BANNERS = [
 ];
 
 export const INITIAL_STICKERS = [
-  { id: 1, name: "Golden Cauldron", imagePath: "/assets/stickers/sticker_cauldron.png", priceGold: 30, category: "alchemy" },
-  { id: 2, name: "Radiant Potion", imagePath: "/assets/stickers/sticker_potion.png", priceGold: 35, category: "alchemy" },
-  { id: 3, name: "Starlight Shard", imagePath: "/assets/stickers/sticker_crystal.png", priceGold: 45, category: "magic" },
-  { id: 4, name: "Sprout Mandrake", imagePath: "/assets/stickers/sticker_mandrake.png", priceGold: 50, category: "nature" }
+  { id: 1, name: "Golden Cauldron", imagePath: "/assets/stickers/sticker_cauldron.png", goldCost: 30, category: "alchemy" },
+  { id: 2, name: "Radiant Potion", imagePath: "/assets/stickers/sticker_potion.png", goldCost: 35, category: "alchemy" },
+  { id: 3, name: "Starlight Shard", imagePath: "/assets/stickers/sticker_crystal.png", goldCost: 45, category: "magic" },
+  { id: 4, name: "Sprout Mandrake", imagePath: "/assets/stickers/sticker_mandrake.png", goldCost: 50, category: "nature" }
 ];
 
 export async function seedDatabase() {
-  console.log("🌱 Seeding database with Items, Badges, Quests, Banners, and Task Pools...");
+  console.log("🌱 Seeding database with Items, Badges, Quests, Banners, Stickers, and Task Pools...");
 
   for (const item of INITIAL_ITEMS) {
     await prisma.item.upsert({
@@ -170,7 +170,7 @@ export async function seedDatabase() {
   }
 
   for (const sticker of INITIAL_STICKERS) {
-    await prisma.stickerCosmetic.upsert({
+    await (prisma as any).sticker.upsert({
       where: { id: sticker.id },
       update: sticker,
       create: sticker
